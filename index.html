@@ -61,7 +61,7 @@ const App = () => {
     e.preventDefault();
     if (!query.trim()) return;
     setLoading(true); setError(''); setResult(null);
-    const apiKey = "AQ.Ab8RN6IuJRuAlId-ayT5p5WmhT7iaQqTCKdvIwfWE5YD4VzcmQ"; // 保留原始檔案中的 API Key 設定
+    const apiKey = 'AQ.Ab8RN6IuJRuAlId-ayT5p5WmhT7iaQqTCKdvIwfWE5YD4VzcmQ'; // 保留原始檔案中的 API Key 設定
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
     const payload = {
       contents: [{parts: [{text: `請詳細解釋這個日文生字或文法：「${query}」。請以繁體中文回答，並提供至少 5 個例句。`}]}],
