@@ -62,7 +62,7 @@ const App = () => {
     if (!query.trim()) return;
     setLoading(true); setError(''); setResult(null);
     const apiKey = 'AQ.Ab8RN6JAxQTjxw9Upu9wkuPajbIQYJ9giAR0KvzadmWAqCZHvA'; // 保留原始檔案中的 API Key 設定
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
     const payload = {
       contents: [{parts: [{text: `請詳細解釋這個日文生字或文法：「${query}」。請以繁體中文回答，並提供至少 5 個例句。`}]}],
       systemInstruction: {parts: [{text: "你是一個專業且具備母語水平的日文老師。請針對用戶輸入的日文字彙或文法，提供由淺入深的繁體中文解釋。要求結構：1. JLPT等級。2. 基本意思。3. 深入的語感、接續或使用場合解說。4. 至少 5 個實用例句（包含日文、平假名/羅馬音、中文翻譯）。5. 相似詞或相似文法的對比。6. 推薦下一個學習的關聯項目。必須嚴格輸出為指定的 JSON 格式。"}]},
