@@ -415,7 +415,7 @@
       await loadItems();
       updateAccountStatus();
       say('已連接 Supabase。');
-      if (Notification.permission === 'granted') $('pushStatus').textContent = '瀏覽器通知權限已允許；如尚未訂閱，請按「開啟到期通知」。';
+      if ('Notification' in window && window.Notification.permission === 'granted') $('pushStatus').textContent = '瀏覽器通知權限已允許；如尚未訂閱，請按「開啟到期通知」。';
     } catch (e) {
       say('初始化失敗：' + (e.message || e) + '。請先執行 supabase/schema.sql 並啟用 Anonymous Sign-Ins。', true);
     }
