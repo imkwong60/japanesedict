@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="description" content="個人庫存與賞味期限追蹤器">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" href="./icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="./icon-180.png">
+  <title>Expiry Tracker｜庫存與賞味期限</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { padding-bottom: env(safe-area-inset-bottom); }
+    .field { width:100%; border:1px solid #cbd5e1; border-radius:.75rem; padding:.7rem .8rem; background:white; color:#0f172a; }
+    .btn { border-radius:.75rem; padding:.65rem .9rem; font-weight:600; }
+    .btn-primary { background:#0f766e; color:white; }
+    .btn-light { background:#f1f5f9; color:#334155; }
+    .btn-danger { background:#fee2e2; color:#991b1b; }
+    .item-card { border:1px solid #e2e8f0; border-radius:1rem; padding:1rem; background:white; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+  <header class="bg-teal-800 text-white">
+    <div class="max-w-3xl mx-auto px-4 py-5 flex items-center justify-between gap-3">
+      <div>
+        <p class="text-xs tracking-widest text-teal-100">PERSONAL INVENTORY</p>
+        <h1 class="text-2xl font-bold">Expiry Tracker</h1>
+        <p class="text-sm text-teal-100 mt-1">庫存與賞味期限追蹤器</p>
+      </div>
+      <svg aria-hidden="true" width="54" height="54" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="8" y="12" width="39" height="44" rx="8" fill="#fff"/><rect x="8" y="12" width="39" height="13" rx="6" fill="#99f6e4"/><path d="M19 8v10M36 8v10" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="m17 35 5 5 10-11" stroke="#0f766e" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="46" cy="44" r="13" fill="#fbbf24" stroke="#0f766e" stroke-width="3"/><path d="M46 37v8l5 3" stroke="#78350f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+  </header>
+
+  <main class="max-w-3xl mx-auto p-4 space-y-5">
+    <section class="grid grid-cols-3 gap-2">
+      <div class="bg-white rounded-xl p-3 border border-slate-200"><p class="text-xs text-slate-500">庫存項目</p><p id="totalCount" class="text-2xl font-bold">—</p></div>
+      <div class="bg-white rounded-xl p-3 border border-amber-200"><p class="text-xs text-amber-700">14 日內到期</p><p id="soonCount" class="text-2xl font-bold text-amber-700">—</p></div>
+      <div class="bg-white rounded-xl p-3 border border-red-200"><p class="text-xs text-red-700">已到期</p><p id="expiredCount" class="text-2xl font-bold text-red-700">—</p></div>
+    </section>
+
+    <section class="bg-white border border-slate-200 rounded-2xl p-4">
+      <div class="flex items-center justify-between gap-2 mb-3">
+        <h2 id="formTitle" class="text-lg font-bold">新增物品</h2>
+        <button id="resetFormBtn" class="btn btn-light text-sm" type="button">清空表格</button>
+      </div>
+      <form id="itemForm" class="space-y-3">
+        <input id="itemId" type="hidden">
+        <div>
+          <label for="itemName" class="block text-sm font-medium mb-1">物品名稱 *</label>
+          <input id="itemName" class="field" maxlength="120" required placeholder="例如：牛奶、維他命、罐頭">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label for="itemQuantity" class="block text-sm font-medium mb-1">數量 *</label>
+            <input id="itemQuantity" class="field" type="number" min="0" step="any" value="1" required>
+          </div>
+          <div>
+            <label for="itemExpiry" class="block text-sm font-medium mb-1">賞味期限／到期日 *</label>
+            <input id="itemExpiry" class="field" type="date" required>
+          </div>
+        </div>
+        <div>
+          <label for="itemNote" class="block text-sm font-medium mb-1">備註</label>
+          <textarea id="itemNote" class="field" rows="2" maxlength="1000" placeholder="例如：放在雪櫃下層"></textarea>
+        </div>
+        <button id="saveBtn" class="btn btn-primary w-full" type="submit">新增物品</button>
+      </form>
+      <p class="text-xs text-slate-500 mt-3">資料會按登入帳戶儲存在 Supabase；請勿把資料庫設成公開可讀寫。</p>
+    </section>
+
+    <section class="space-y-3">
+      <div class="flex items-center justify-between gap-2">
+        <h2 class="text-lg font-bold">我的庫存</h2>
+        <button id="refreshBtn" class="btn btn-light text-sm" type="button">重新整理</button>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
+        <input id="searchInput" class="field" placeholder="搜尋物品名稱或備註">
+        <select id="filterSelect" class="field sm:w-44" aria-label="篩選庫存">
+          <option value="all">全部物品</option>
+          <option value="soon">14 日內到期</option>
+          <option value="expired">已到期</option>
+        </select>
+      </div>
+      <div id="status" role="status" class="text-sm text-slate-600" aria-live="polite">正在連接資料庫…</div>
+      <div id="itemsList" class="space-y-3"></div>
+      <div id="emptyState" class="hidden text-center py-10 text-slate-500 bg-white border border-dashed rounded-2xl">
+        <div class="text-4xl mb-2">📦</div><p class="font-semibold">目前沒有符合條件的物品</p><p class="text-sm mt-1">使用上方表格新增第一件物品。</p>
+      </div>
+    </section>
+
+    <section class="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
+      <h2 class="font-bold text-lg">帳戶與換手機</h2>
+      <p class="text-sm text-slate-600">先在舊手機把目前資料綁定電郵及密碼；換手機後用同一組資料登入，就可以讀取同一份 Supabase 資料。新手機仍需另外開啟推播通知。</p>
+      <p id="accountStatus" class="text-sm rounded-lg bg-slate-50 p-3" aria-live="polite">正在檢查帳戶…</p>
+      <div class="grid sm:grid-cols-2 gap-3">
+        <div><label for="accountEmail" class="block text-sm font-medium mb-1">電郵地址</label><input id="accountEmail" class="field" type="email" autocomplete="email" placeholder="你自己的電郵"></div>
+        <div><label for="accountPassword" class="block text-sm font-medium mb-1">密碼（至少 6 位）</label><input id="accountPassword" class="field" type="password" autocomplete="new-password" minlength="6" placeholder="請自行設定"></div>
+      </div>
+      <div class="grid sm:grid-cols-2 gap-2">
+        <button id="linkAccountBtn" class="btn btn-primary" type="button">綁定此手機現有資料</button>
+        <button id="loginAccountBtn" class="btn btn-light" type="button">登入已綁定帳戶</button>
+      </div>
+      <p id="accountMessage" class="text-sm text-slate-600" aria-live="polite">請先在目前有資料的手機完成「綁定」，並按電郵確認連結（如有）。</p>
+      <div class="border-t border-slate-200 pt-3 space-y-2">
+        <h3 class="font-semibold">資料備份（額外保障）</h3>
+        <p class="text-xs text-slate-500">JSON 備份只包含庫存紀錄，不包含登入密碼或推播訂閱。匯入會合併／更新同 ID 紀錄，不會自動刪除現有項目。</p>
+        <div class="grid grid-cols-2 gap-2">
+          <button id="exportBackupBtn" class="btn btn-light" type="button">下載 JSON 備份</button>
+          <button id="importBackupBtn" class="btn btn-light" type="button">匯入 JSON 備份</button>
+        </div>
+        <input id="backupFileInput" type="file" accept="application/json,.json" class="hidden">
+      </div>
+    </section>
+
+    <section class="bg-white border border-slate-200 rounded-2xl p-4">
+      <h2 class="font-bold text-lg">手機通知與安裝</h2>
+      <p class="text-sm text-slate-600 mt-1">開啟通知後，伺服器每日會檢查到期項目。提醒節點為到期前 14、7、3、1 日及到期當日，避免每日重複轟炸。</p>
+      <div class="grid sm:grid-cols-2 gap-2 mt-3">
+        <button id="enablePushBtn" class="btn btn-primary" type="button">🔔 開啟到期通知</button>
+        <button id="installHelpBtn" class="btn btn-light" type="button">➕ 如何加到主畫面</button>
+      </div>
+      <p id="pushStatus" class="text-sm text-slate-600 mt-3" aria-live="polite">尚未檢查通知狀態。</p>
+      <p class="text-xs text-slate-500 mt-2">首次設定需部署 Edge Function，並在 Supabase SQL Editor 執行排程 SQL；無需手動建立 Secrets。</p>
+    </section>
+
+    <footer class="text-xs text-slate-500 text-center py-3">Expiry Tracker · 個人用途 · 建議定期備份資料</footer>
+  </main>
+
+  <dialog id="helpDialog" class="rounded-2xl p-5 max-w-sm w-[calc(100%-2rem)] shadow-xl">
+    <h3 class="font-bold text-lg">加到手機主畫面</h3>
+    <p class="text-sm text-slate-600 mt-2">Android Chrome：先用 HTTPS 網址開啟本頁，點右上角「⋮」，選擇「加到主畫面」或「安裝應用程式」。安裝後再按「開啟到期通知」。</p>
+    <button id="closeHelpBtn" class="btn btn-primary w-full mt-4" type="button">知道了</button>
+  </dialog>
+
+<script>
+(() => {
+  'use strict';
+  // Supabase Project URL + anon key + VAPID public key. VAPID private key is only in the server-side Edge Function.
+  const SUPABASE_URL = 'https://wanknivxcsrasdkkxmfr.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndhbmtuaXZ4Y3NyYXNka2t4bWZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODczMzE4NjcsImV4cCI6MjEwMjkwNzg2N30.tqsFimERtYCxoh8J-8FlqxByWtX2gNnyaGo08jditrs';
+  // Replace with the NEW VAPID public key after rotating your exposed key pair.
+  const VAPID_PUBLIC_KEY = 'BK7XokVkK1CMeNCLPWrRMwZtlBF7hXhY9UAkBeGvZfLI6hRqlrOv8FN_cUg74vW2HRu0jicu8YDFIVAFjE7zFSU';
+
+  const $ = id => document.getElementById(id);
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+  });
+  let currentUser = null;
+  let items = [];
+
+  function say(message, isError = false) {
+    $('status').textContent = message;
+    $('status').className = 'text-sm ' + (isError ? 'text-red-700' : 'text-slate-600');
+  }
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function dayDiff(dateString) {
+    const [y,m,d] = dateString.split('-').map(Number);
+    const target = Date.UTC(y, m - 1, d);
+    const now = new Date();
+    const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+    return Math.round((target - today) / 86400000);
+  }
+  function expiryText(days) {
+    if (days < 0) return `已過期 ${Math.abs(days)} 日`;
+    if (days === 0) return '今日到期';
+    if (days === 1) return '明日到期';
+    return `${days} 日後到期`;
+  }
+  function cardClass(days) {
+    if (days < 0 || days === 0) return 'border-red-300 bg-red-50';
+    if (days <= 3) return 'border-red-200 bg-red-50';
+    if (days <= 14) return 'border-amber-200 bg-amber-50';
+    return 'border-slate-200 bg-white';
+  }
+  async function ensureSession() {
+    const { data: { session }, error } = await sb.auth.getSession();
+    if (error) throw error;
+    if (session) { currentUser = session.user; return; }
+    const result = await sb.auth.signInAnonymously();
+    if (result.error) throw new Error('無法建立匿名登入。請到 Supabase Auth → Providers 啟用 Anonymous Sign-Ins。' + result.error.message);
+    currentUser = result.data.user;
+  }
+  async function loadItems() {
+    if (!currentUser) await ensureSession();
+    const { data, error } = await sb.from('expiry_items')
+      .select('id,name,quantity,expiry_date,note,created_at,updated_at')
+      .eq('owner_id', currentUser.id)
+      .order('expiry_date', { ascending: true });
+    if (error) throw error;
+    items = data || [];
+    renderItems();
+  }
+  function renderItems() {
+    const query = $('searchInput').value.trim().toLocaleLowerCase();
+    const filter = $('filterSelect').value;
+    const enriched = items.map(item => ({...item, days: dayDiff(item.expiry_date)}))
+      .filter(item => {
+        const matchesQuery = !query || `${item.name} ${item.note || ''}`.toLocaleLowerCase().includes(query);
+        const matchesFilter = filter === 'all' || (filter === 'soon' && item.days >= 0 && item.days <= 14) || (filter === 'expired' && item.days < 0);
+        return matchesQuery && matchesFilter;
+      }).sort((a,b) => a.days - b.days || a.name.localeCompare(b.name, 'zh-Hant'));
+    $('totalCount').textContent = items.length;
+    $('soonCount').textContent = items.filter(x => { const d = dayDiff(x.expiry_date); return d >= 0 && d <= 14; }).length;
+    $('expiredCount').textContent = items.filter(x => dayDiff(x.expiry_date) < 0).length;
+    $('itemsList').innerHTML = enriched.map(item => `
+      <article class="item-card ${cardClass(item.days)}">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <h3 class="font-bold text-lg break-words">${escapeHtml(item.name)}</h3>
+            <p class="text-sm text-slate-600 mt-1">數量：${escapeHtml(item.quantity)}</p>
+            <p class="text-sm text-slate-600">到期日：${escapeHtml(item.expiry_date)}</p>
+            <p class="font-bold mt-2 ${item.days <= 3 ? 'text-red-700' : item.days <= 14 ? 'text-amber-800' : 'text-teal-800'}">${escapeHtml(expiryText(item.days))}</p>
+            ${item.note ? `<p class="text-sm text-slate-600 mt-2 whitespace-pre-wrap break-words">${escapeHtml(item.note)}</p>` : ''}
+          </div>
+          <div class="flex flex-col gap-2 shrink-0">
+            <button class="btn btn-light text-sm" data-edit="${item.id}" type="button">編輯</button>
+            <button class="btn btn-danger text-sm" data-delete="${item.id}" type="button">刪除</button>
+          </div>
+        </div>
+      </article>`).join('');
+    $('emptyState').classList.toggle('hidden', enriched.length !== 0);
+  }
+  function resetForm() {
+    $('itemForm').reset(); $('itemId').value = ''; $('itemQuantity').value = '1';
+    $('formTitle').textContent = '新增物品'; $('saveBtn').textContent = '新增物品';
+  }
+  $('itemForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    $('saveBtn').disabled = true;
+    try {
+      await ensureSession();
+      const id = $('itemId').value;
+      const payload = {
+        name: $('itemName').value.trim(),
+        quantity: Number($('itemQuantity').value),
+        expiry_date: $('itemExpiry').value,
+        note: $('itemNote').value.trim(),
+        owner_id: currentUser.id,
+        updated_at: new Date().toISOString()
+      };
+      if (!payload.name || !payload.expiry_date || !Number.isFinite(payload.quantity) || payload.quantity < 0) throw new Error('請檢查名稱、數量及到期日。');
+      const result = id
+        ? await sb.from('expiry_items').update(payload).eq('id', id).eq('owner_id', currentUser.id)
+        : await sb.from('expiry_items').insert(payload);
+      if (result.error) throw result.error;
+      resetForm(); await loadItems(); say(id ? '物品已更新。' : '物品已新增。');
+    } catch (err) { say(err.message || '儲存失敗。', true); }
+    finally { $('saveBtn').disabled = false; }
+  });
+  $('itemsList').addEventListener('click', async e => {
+    const editButton = e.target.closest('[data-edit]');
+    const deleteButton = e.target.closest('[data-delete]');
+    if (editButton) {
+      const item = items.find(x => x.id === editButton.dataset.edit);
+      if (!item) return;
+      $('itemId').value = item.id; $('itemName').value = item.name;
+      $('itemQuantity').value = item.quantity; $('itemExpiry').value = item.expiry_date;
+      $('itemNote').value = item.note || ''; $('formTitle').textContent = '編輯物品'; $('saveBtn').textContent = '儲存修改';
+      window.scrollTo({top:0, behavior:'smooth'});
+    }
+    if (deleteButton) {
+      const item = items.find(x => x.id === deleteButton.dataset.delete);
+      if (!item || !confirm(`確定刪除「${item.name}」？`)) return;
+      try {
+        const { error } = await sb.from('expiry_items').delete().eq('id', item.id).eq('owner_id', currentUser.id);
+        if (error) throw error;
+        await loadItems(); say('物品已刪除。');
+      } catch (err) { say(err.message || '刪除失敗。', true); }
+    }
+  });
+  $('resetFormBtn').addEventListener('click', resetForm);
+  $('refreshBtn').addEventListener('click', async () => { try { await loadItems(); say('資料已更新。'); } catch(e) { say(e.message, true); } });
+  $('searchInput').addEventListener('input', renderItems);
+  $('filterSelect').addEventListener('change', renderItems);
+
+  function updateAccountStatus() {
+    const user = currentUser;
+    if (!user) { $('accountStatus').textContent = '尚未登入。'; return; }
+    const isAnonymous = user.is_anonymous === true || user.app_metadata?.provider === 'anonymous';
+    $('accountStatus').textContent = isAnonymous
+      ? '目前是此裝置的匿名帳戶；如手機遺失或清除瀏覽器資料，可能無法找回。請先綁定電郵及密碼。'
+      : `已登入帳戶：${user.email || '已綁定帳戶'}`;
+    $('accountPassword').setAttribute('autocomplete', isAnonymous ? 'new-password' : 'current-password');
+  }
+  $('linkAccountBtn').addEventListener('click', async () => {
+    const email = $('accountEmail').value.trim();
+    const password = $('accountPassword').value;
+    if (!email || !password || password.length < 6) { $('accountMessage').textContent = '請輸入有效電郵及至少 6 位密碼。'; return; }
+    $('linkAccountBtn').disabled = true;
+    $('accountMessage').textContent = '正在將目前帳戶綁定到電郵…';
+    try {
+      await ensureSession();
+      const { data, error } = await sb.auth.updateUser({ email, password });
+      if (error) throw error;
+      currentUser = data.user || currentUser;
+      updateAccountStatus();
+      $('accountMessage').textContent = '已提交帳戶更新。若 Supabase 要求確認電郵，請先打開確認郵件；確認後請用同一電郵及密碼在新手機登入。原有資料不會主動搬到新 ID。';
+    } catch (e) {
+      $('accountMessage').textContent = '綁定失敗：' + (e.message || e);
+    } finally { $('linkAccountBtn').disabled = false; }
+  });
+  $('loginAccountBtn').addEventListener('click', async () => {
+    const email = $('accountEmail').value.trim();
+    const password = $('accountPassword').value;
+    if (!email || !password) { $('accountMessage').textContent = '請輸入已綁定帳戶的電郵及密碼。'; return; }
+    $('loginAccountBtn').disabled = true;
+    $('accountMessage').textContent = '正在登入並載入資料…';
+    try {
+      const { data, error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      currentUser = data.user;
+      resetForm();
+      await loadItems();
+      updateAccountStatus();
+      say('已登入帳戶並載入雲端資料。');
+      $('accountMessage').textContent = `登入成功，已載入 ${items.length} 筆紀錄。`;
+    } catch (e) {
+      $('accountMessage').textContent = '登入失敗：' + (e.message || e);
+    } finally { $('loginAccountBtn').disabled = false; }
+  });
+  $('exportBackupBtn').addEventListener('click', async () => {
+    try {
+      await ensureSession();
+      await loadItems();
+      const backup = { app: 'Expiry Tracker', version: 1, exported_at: new Date().toISOString(), items: items };
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = `expiry-tracker-backup-${new Date().toISOString().slice(0,10)}.json`;
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      $('accountMessage').textContent = `備份已產生，共 ${items.length} 筆紀錄。請將 JSON 檔保存到安全位置。`;
+    } catch (e) { $('accountMessage').textContent = '備份失敗：' + (e.message || e); }
+  });
+  $('importBackupBtn').addEventListener('click', () => $('backupFileInput').click());
+  $('backupFileInput').addEventListener('change', async () => {
+    const file = $('backupFileInput').files?.[0];
+    if (!file) return;
+    try {
+      await ensureSession();
+      const parsed = JSON.parse(await file.text());
+      if (!parsed || !Array.isArray(parsed.items)) throw new Error('檔案格式不正確，找不到 items 清單。');
+      const rows = parsed.items.map(item => {
+        if (!item || typeof item.name !== 'string' || !item.name.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(item.expiry_date)) throw new Error('備份內有不完整的紀錄，未匯入任何資料。');
+        const row = { name: item.name.trim(), quantity: Number(item.quantity ?? 1), expiry_date: item.expiry_date, note: String(item.note ?? ''), owner_id: currentUser.id, updated_at: new Date().toISOString() };
+        if (item.id && /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(item.id)) row.id = item.id;
+        if (item.created_at) row.created_at = item.created_at;
+        if (!Number.isFinite(row.quantity) || row.quantity < 0) throw new Error('備份內數量格式不正確，未匯入任何資料。');
+        return row;
+      });
+      if (!rows.length) throw new Error('備份內沒有紀錄。');
+      if (!confirm(`準備匯入 ${rows.length} 筆紀錄。相同 ID 的紀錄可能被更新，其他現有紀錄會保留。是否繼續？`)) return;
+      const { error } = await sb.from('expiry_items').upsert(rows, { onConflict: 'id' });
+      if (error) throw error;
+      await loadItems();
+      $('accountMessage').textContent = `匯入完成，現有帳戶共 ${items.length} 筆紀錄。`;
+    } catch (e) { $('accountMessage').textContent = '匯入失敗：' + (e.message || e); }
+    finally { $('backupFileInput').value = ''; }
+  });
+
+  function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = atob(base64);
+    return Uint8Array.from([...raw].map(char => char.charCodeAt(0)));
+  }
+  async function enablePush() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      throw new Error('此瀏覽器不支援 Web Push。請使用支援推播的 HTTPS 瀏覽器。');
+    }
+    if (VAPID_PUBLIC_KEY.startsWith('REPLACE_')) throw new Error('請先在 index.html 設定新的 VAPID Public Key。');
+    if (!window.isSecureContext) throw new Error('推播需要 HTTPS 網址（localhost 除外）。');
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') throw new Error('你尚未允許通知。請在瀏覽器網站設定中開啟通知。');
+    const registration = await navigator.serviceWorker.register('./sw.js');
+    await navigator.serviceWorker.ready;
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription) subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+    await ensureSession();
+    const json = subscription.toJSON();
+    const { error } = await sb.from('push_subscriptions').upsert({
+      owner_id: currentUser.id,
+      endpoint: json.endpoint,
+      p256dh: json.keys.p256dh,
+      auth: json.keys.auth,
+      subscription_json: json,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'endpoint' });
+    if (error) throw error;
+    $('pushStatus').textContent = '✅ 到期通知已啟用。請確認手機系統及瀏覽器允許通知。';
+  }
+  $('enablePushBtn').addEventListener('click', async () => {
+    $('enablePushBtn').disabled = true;
+    $('pushStatus').textContent = '正在設定通知…';
+    try { await enablePush(); }
+    catch (e) { $('pushStatus').textContent = '設定失敗：' + (e.message || e); }
+    finally { $('enablePushBtn').disabled = false; }
+  });
+  $('installHelpBtn').addEventListener('click', () => $('helpDialog').showModal());
+  $('closeHelpBtn').addEventListener('click', () => $('helpDialog').close());
+
+  sb.auth.onAuthStateChange((_event, session) => {
+    if (session?.user) { currentUser = session.user; updateAccountStatus(); }
+  });
+
+  async function init() {
+    try {
+      if ('serviceWorker' in navigator && window.isSecureContext) await navigator.serviceWorker.register('./sw.js');
+      await ensureSession();
+      await loadItems();
+      updateAccountStatus();
+      say('已連接 Supabase。');
+      if (Notification.permission === 'granted') $('pushStatus').textContent = '瀏覽器通知權限已允許；如尚未訂閱，請按「開啟到期通知」。';
+    } catch (e) {
+      say('初始化失敗：' + (e.message || e) + '。請先執行 supabase/schema.sql 並啟用 Anonymous Sign-Ins。', true);
+    }
+  }
+  init();
+})();
+</script>
+</body>
+</html>
