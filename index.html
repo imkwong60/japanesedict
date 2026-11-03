@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="description" content="安全密碼與資料管理 PWA，資料儲存在本地瀏覽器，支援離線使用。">
+    <title>分享本本</title>
+
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="分享本本">
+    <meta name="theme-color" content="#f7f5f0">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
+    <link rel="icon" href="favicon.ico">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web@2.1.2"></script>
+    <link rel="stylesheet" href="styles.css">
+    <script src="app.js"></script>
+
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f5f0;
+        --surface: #fffcf7;
+        --text: #1c1917;
+        --muted: #78716c;
+        --border: #e7e5e0;
+        --accent: #0d9488;
+        --accent-soft: #ccfbf1;
+        --header: #f7f5f0;
+        --radius: 14px;
+      }
+      [x-cloak] { display: none !important; }
+      html, body {
+        margin: 0;
+        background: var(--bg) !important;
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-text-size-adjust: 100%;
+        overscroll-behavior-y: none;
+        min-height: 100dvh;
+      }
+      button, input, textarea { font: inherit; }
+      button, label[for] { touch-action: manipulation; }
+      input, textarea {
+        font-size: 16px !important;
+        border-radius: 10px !important;
+      }
+      input:focus, textarea:focus {
+        outline: none !important;
+        border-color: var(--accent) !important;
+        box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15) !important;
+      }
+
+      /* Header – 米白，與整頁一致 */
+      #app-header {
+        background: var(--header) !important;
+        color: var(--text);
+        border-bottom: 1px solid var(--border) !important;
+        box-shadow: none;
+      }
+      #app-header input {
+        background: #fff !important;
+        border: 1px solid var(--border) !important;
+        color: var(--text) !important;
+        border-radius: 10px !important;
+      }
+      #app-header input::placeholder { color: #a8a29e; }
+      #app-header input:focus {
+        background: #fff !important;
+        border-color: var(--accent) !important;
+        box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.12) !important;
+      }
+      #app-header .hdr-btn {
+        background: #fff;
+        border: 1px solid var(--border);
+        color: var(--text);
+        border-radius: 10px;
+        min-height: 38px;
+        transition: background .15s;
+      }
+      #app-header .hdr-btn:active { background: #f5f5f4; }
+
+      /* Cards */
+      .stat-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: 0 1px 2px rgba(15,23,42,.04);
+      }
+      .list-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: 0 1px 2px rgba(15,23,42,.04);
+        overflow: hidden;
+      }
+      .list-row {
+        border-bottom: 1px solid var(--border);
+        transition: background .12s;
+      }
+      .list-row:last-child { border-bottom: none; }
+      .list-row:active { background: #f5f3ee; }
+
+      .avatar {
+        width: 36px; height: 36px;
+        border-radius: 10px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-weight: 700;
+        font-size: 14px;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+      }
+      .pwd-chip {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        background: #f0ebe3;
+        padding: 2px 8px;
+        border-radius: 6px;
+        font-size: 12px;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .note-line {
+        font-size: 12px;
+        color: var(--muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 100%;
+      }
+      .note-line.expanded {
+        white-space: pre-wrap;
+        overflow: visible;
+        text-overflow: unset;
+      }
+
+      .fab {
+        position: fixed; z-index: 40;
+        right: 18px;
+        bottom: max(18px, calc(env(safe-area-inset-bottom) + 12px));
+        width: 54px; height: 54px; min-height: 54px;
+        border: 0; border-radius: 16px;
+        display: flex; align-items: center; justify-content: center;
+        background: var(--accent); color: #fff; font-size: 24px;
+        box-shadow: 0 6px 20px rgba(13,148,136,.35);
+        transition: transform .12s, background .12s;
+      }
+      .fab:active { transform: scale(.96); background: #0f766e; }
+
+      .modal-panel {
+        border-radius: 18px !important;
+        border: 1px solid var(--border);
+        box-shadow: 0 20px 60px rgba(15,23,42,.18) !important;
+      }
+      .modal-panel button[type="submit"] {
+        background: var(--accent) !important;
+        border-radius: 10px !important;
+        min-height: 44px;
+      }
+      .toast-item {
+        border-radius: 12px !important;
+        box-shadow: 0 8px 28px rgba(0,0,0,.18) !important;
+      }
+
+      @media (max-width: 639px) {
+        #app-header .hdr-actions {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+          width: 100%;
+        }
+        #app-header .hdr-actions > *:last-child {
+          grid-column: 1 / -1;
+        }
+        #main-content {
+          padding-left: 12px !important;
+          padding-right: 12px !important;
+        }
+        .pwd-chip { max-width: calc(100vw - 150px); }
+        .modal-panel { width: calc(100vw - 20px) !important; max-width: 520px; }
+        .modal-panel form > div:last-child {
+          display: flex; flex-direction: column; gap: 8px;
+          padding-bottom: calc(12px + env(safe-area-inset-bottom)) !important;
+        }
+        .modal-panel form > div:last-child button { width: 100%; margin: 0 !important; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+          transition-duration: .01ms !important;
+          animation-duration: .01ms !important;
+        }
+      }
+    </style>
+</head>
+<body class="min-h-screen" x-data="passwordManager()" x-cloak>
+
+    <!-- Dark header (portfolio style) -->
+    <header id="app-header" class="fixed top-0 left-0 right-0 z-30" style="padding-top:max(0.65rem,env(safe-area-inset-top))">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 pb-3">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div class="flex items-center gap-3 min-w-0">
+                    <img src="icons/apple-touch-icon.png" alt="Kumamon" class="w-10 h-10 rounded-xl shadow-sm object-cover shrink-0 ring-1 ring-stone-200">
+                    <div class="min-w-0">
+                        <h1 class="text-lg sm:text-xl font-semibold text-stone-900 tracking-tight leading-tight">分享本本</h1>
+                        <div class="flex items-center gap-2 min-w-0">
+                            <p class="text-[11px] sm:text-xs text-stone-500 truncate">安全密碼與資料管理 · 離線 PWA</p>
+                            <span class="inline-flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium border"
+                                  :class="isOnline
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : 'bg-amber-50 text-amber-700 border-amber-200'"
+                                  :title="isOnline ? '已連線' : '離線模式'">
+                                <span class="w-1.5 h-1.5 rounded-full"
+                                      :class="isOnline ? 'bg-emerald-500' : 'bg-amber-500'"></span>
+                                <span x-text="isOnline ? '在線' : '離線'"></span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="hdr-actions flex flex-wrap gap-2 w-full sm:w-auto">
+                    <button type="button" @click="exportToJson()" class="hdr-btn flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium">
+                        <i class="ph ph-file-js text-base"></i><span>匯出 JSON</span>
+                    </button>
+                    <label class="hdr-btn flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium cursor-pointer">
+                        <i class="ph ph-upload-simple text-base"></i><span>匯入 JSON</span>
+                        <input type="file" accept=".json,application/json" class="hidden" @change="importFromJson($event)">
+                    </label>
+                    <button type="button" @click="exportToHtml()" class="hdr-btn flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium">
+                        <i class="ph ph-download-simple text-base"></i><span>匯出 HTML</span>
+                    </button>
+                </div>
+            </div>
+            <div class="relative mt-3">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <i class="ph ph-magnifying-glass text-slate-400 text-lg"></i>
+                </div>
+                <input type="text" x-model="searchQuery" placeholder="搜尋網站、帳號或備忘錄..." class="w-full pl-10 pr-4 py-2.5 text-sm">
+            </div>
+        </div>
+    </header>
+
+    <main id="main-content" class="max-w-4xl mx-auto px-4 sm:px-6 pb-24" style="padding-top: max(200px, calc(env(safe-area-inset-top) + 180px))">
+
+        <!-- Stats strip -->
+        <div class="grid grid-cols-2 gap-2.5 mb-4">
+            <div class="stat-card px-3.5 py-3">
+                <p class="text-[11px] text-slate-500 mb-0.5">項目總數</p>
+                <p class="text-xl font-semibold text-slate-900 tabular-nums" x-text="passwords.length"></p>
+            </div>
+            <div class="stat-card px-3.5 py-3">
+                <p class="text-[11px] text-slate-500 mb-0.5">目前顯示</p>
+                <p class="text-xl font-semibold text-slate-900 tabular-nums">
+                    <span x-text="filteredPasswords.length"></span>
+                    <span x-show="searchQuery" class="text-xs font-normal text-teal-600 ml-1">（搜尋中）</span>
+                </p>
+            </div>
+        </div>
+
+        <!-- Empty -->
+        <div x-show="filteredPasswords.length === 0" class="stat-card text-center py-14 px-6">
+            <img src="icons/apple-touch-icon.png" alt="" class="w-14 h-14 mx-auto mb-3 rounded-2xl opacity-80">
+            <p class="text-slate-500 text-sm" x-text="searchQuery ? '找不到符合的項目' : '尚無資料，點右下角 + 新增或匯入 JSON'"></p>
+        </div>
+
+        <!-- List -->
+        <div x-show="filteredPasswords.length > 0" class="list-card">
+            <ul>
+                <template x-for="item in filteredPasswords" :key="item.id">
+                    <li class="list-row px-3.5 py-3.5 sm:px-4 sm:py-4">
+                        <!-- Title row + actions -->
+                        <div class="flex items-start justify-between gap-2 mb-1.5">
+                            <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                                <div class="avatar">
+                                    <span x-text="(item.siteName || '?').charAt(0).toUpperCase()"></span>
+                                </div>
+                                <div class="min-w-0">
+                                    <div class="flex items-center gap-1.5">
+                                        <h3 class="text-[15px] font-semibold text-slate-900 truncate" x-text="item.siteName"></h3>
+                                        <a x-show="item.url" :href="item.url.startsWith('http') ? item.url : 'https://' + item.url" target="_blank" rel="noopener noreferrer" class="text-slate-400 hover:text-teal-600 p-0.5 shrink-0" title="開啟網站">
+                                            <i class="ph ph-link text-sm"></i>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex items-center shrink-0 -mr-1">
+                                <button type="button" @click="editItem(item)" class="p-1.5 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg" title="編輯">
+                                    <i class="ph ph-pencil-simple text-base"></i>
+                                </button>
+                                <button type="button" @click="deleteItem(item.id)" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg" title="刪除">
+                                    <i class="ph ph-trash text-base"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Account / password – compact -->
+                        <div class="pl-[46px] space-y-1">
+                            <div class="flex items-center gap-1.5 min-w-0">
+                                <span class="text-[11px] text-slate-400 w-8 shrink-0">帳號</span>
+                                <span class="text-xs text-slate-700 font-mono truncate select-all flex-1 min-w-0" x-text="item.username"></span>
+                                <button type="button" @click="copyToClipboard(item.username, '帳號已複製')" class="p-1 text-slate-300 hover:text-teal-600 rounded shrink-0" title="複製帳號">
+                                    <i class="ph ph-copy text-sm"></i>
+                                </button>
+                            </div>
+                            <div class="flex items-center gap-1.5 min-w-0">
+                                <span class="text-[11px] text-slate-400 w-8 shrink-0">密碼</span>
+                                <span class="pwd-chip select-all" x-text="item.password"></span>
+                                <button type="button" @click="copyToClipboard(item.password, '密碼已複製')" class="p-1 text-slate-300 hover:text-teal-600 rounded shrink-0" title="複製密碼">
+                                    <i class="ph ph-copy text-sm"></i>
+                                </button>
+                            </div>
+                            <!-- Notes: single line by default, tap to expand -->
+                            <div x-show="item.notes" class="flex items-start gap-1.5 pt-0.5">
+                                <i class="ph ph-note-pencil text-slate-300 text-sm mt-0.5 shrink-0"></i>
+                                <button type="button"
+                                    class="note-line text-left flex-1 min-w-0"
+                                    :class="{ 'expanded': item._noteOpen }"
+                                    @click="item._noteOpen = !item._noteOpen"
+                                    :title="item._noteOpen ? '點擊收合' : '點擊展開'"
+                                    x-text="item.notes"></button>
+                            </div>
+                        </div>
+                    </li>
+                </template>
+            </ul>
+        </div>
+    </main>
+
+    <!-- FAB -->
+    <button type="button" class="fab" @click.prevent.stop="openModal()" title="新增項目" aria-label="新增項目">
+        <i class="ph ph-plus"></i>
+    </button>
+
+    <!-- Modal -->
+    <div x-show="isModalOpen" class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" style="display:none">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div x-show="isModalOpen" x-transition.opacity class="fixed inset-0 bg-slate-900/50 transition-opacity" @click="closeModal()"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div x-show="isModalOpen" x-transition class="modal-panel inline-block align-bottom bg-white text-left overflow-hidden transform transition-all sm:my-8 sm:align-middle sm:max-w-lg w-full">
+                <form @submit.prevent="saveItem">
+                    <div class="bg-white px-4 pt-5 pb-4 sm:p-6">
+                        <div class="flex items-center gap-3 mb-4">
+                            <img src="icons/apple-touch-icon.png" alt="" class="w-10 h-10 rounded-xl object-cover">
+                            <h3 class="text-lg font-semibold text-slate-900" id="modal-title" x-text="editingId ? '編輯項目' : '新增密碼項目'"></h3>
+                        </div>
+                        <div class="space-y-3.5">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">網站/服務名稱 <span class="text-rose-500">*</span></label>
+                                <input type="text" x-model="formData.siteName" required class="w-full border border-slate-200 rounded-lg px-3.5 py-2.5 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">網址 (選填)</label>
+                                <input type="text" x-model="formData.url" placeholder="ex: example.com" class="w-full border border-slate-200 rounded-lg px-3.5 py-2.5 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">帳號/使用者名稱 <span class="text-rose-500">*</span></label>
+                                <input type="text" x-model="formData.username" required class="w-full border border-slate-200 rounded-lg px-3.5 py-2.5 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">密碼 <span class="text-rose-500">*</span></label>
+                                <div class="relative">
+                                    <input :type="showPasswordInModal ? 'text' : 'password'" x-model="formData.password" required class="w-full border border-slate-200 rounded-lg px-3.5 py-2.5 pr-10 text-sm font-mono">
+                                    <button type="button" @click="showPasswordInModal = !showPasswordInModal" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600">
+                                        <i class="ph text-lg" :class="showPasswordInModal ? 'ph-eye-slash' : 'ph-eye'"></i>
+                                    </button>
+                                </div>
+                                <button type="button" @click="generatePassword" class="mt-2 text-xs text-teal-600 hover:text-teal-800 flex items-center gap-1 font-medium">
+                                    <i class="ph ph-magic-wand text-sm"></i> 產生安全隨機密碼
+                                </button>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">備忘錄 (選填)</label>
+                                <textarea x-model="formData.notes" rows="2" class="w-full border border-slate-200 rounded-lg px-3.5 py-2.5 text-sm" placeholder="簡短備註即可"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-[#f5f2eb] px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2 rounded-b-[18px]">
+                        <button type="submit" class="w-full sm:w-auto inline-flex justify-center rounded-lg border border-transparent px-4 py-2.5 text-sm font-medium text-white hover:opacity-90">儲存</button>
+                        <button type="button" @click="closeModal()" class="mt-2 sm:mt-0 w-full sm:w-auto inline-flex justify-center rounded-lg border border-stone-200 px-4 py-2.5 bg-white text-sm font-medium text-stone-700 hover:bg-stone-50">取消</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toasts -->
+    <div class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none" style="bottom:max(1rem,calc(env(safe-area-inset-bottom) + 1rem))">
+        <template x-for="toast in toasts" :key="toast.id">
+            <div class="toast-item bg-slate-900 text-white px-4 py-3 rounded-xl flex items-center gap-3 min-w-[200px] pointer-events-auto">
+                <i class="ph text-xl shrink-0" :class="toast.type === 'success' ? 'ph-check-circle text-emerald-400' : (toast.type === 'error' ? 'ph-warning-circle text-rose-400' : 'ph-info text-sky-400')"></i>
+                <span x-text="toast.message" class="text-sm font-medium"></span>
+            </div>
+        </template>
+    </div>
+
+</body>
+</html>
