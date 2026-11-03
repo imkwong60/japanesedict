@@ -12,8 +12,8 @@
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
   <link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png" />
-  <link rel="stylesheet" href="./tailwind.css" />
-  <script src="https://unpkg.com/lucide@0.263.1/dist/umd/lucide.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@0.460.0"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
@@ -40,10 +40,6 @@
     .btn-soft-minus { background: #f1f5f9; color: #64748b; }
     .btn-soft-plus { background: #fff1f2; color: #e11d48; }
     .btn-soft-minus:active, .btn-soft-plus:active { transform: scale(0.96); }
-    html #app { height: 100vh; height: 100dvh; }
-    html .text-slate-400 { color: #64748b; }
-    html .text-slate-300 { color: #94a3b8; }
-    .hscroll { touch-action: pan-x pan-y; }
   </style>
 </head>
 <body class="h-full bg-slate-50 text-slate-800 antialiased">
@@ -87,10 +83,10 @@
 
   // BMI bar segments: [min, max, widthPercent]
   const BMI_SEGMENTS = [
-    { min: 0, max: 18.5, width: 20, label: '過輕', color: 'bg-blue-300' },
-    { min: 18.5, max: 24, width: 30, label: '適中', color: 'bg-emerald-400' },
-    { min: 24, max: 28, width: 25, label: '過重', color: 'bg-amber-300' },
-    { min: 28, max: 40, width: 25, label: '肥胖', color: 'bg-red-400' },
+    { min: 0, max: 18.5, width: 20, label: '過輕' },
+    { min: 18.5, max: 24, width: 30, label: '適中' },
+    { min: 24, max: 28, width: 25, label: '過重' },
+    { min: 28, max: 40, width: 25, label: '肥胖' },
   ];
 
   let idx = 0, startX = 0, startY = 0, currX = 0, dragging = false, panelW = 0, locked = null;
@@ -99,10 +95,6 @@
   const txt = (id, v) => { if ($(id)) $(id).textContent = v; };
   const round1 = n => Math.round(n * 10) / 10;
   const money = n => round1(n).toFixed(1);
-  const esc = s => String(s ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
-  const lsGet = (k, def) => { try { const v = localStorage.getItem(k); return v == null ? def : JSON.parse(v); } catch { return def; } };
-  const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
-  const lsDel = k => { try { localStorage.removeItem(k); } catch {} };
 
   function buildShell() {
     const track = $('track');
@@ -122,56 +114,50 @@
     $('btn-reset').onclick = () => window.dispatchEvent(new CustomEvent('reset-calc', { detail: { id: CALCS[idx].id } }));
   }
 
-  let trackX = 0, wcTimer = null;
-  function setTrack(x, anim) {
-    const t = $('track');
-    clearTimeout(wcTimer);
-    if (anim && x !== trackX) {
-      t.style.willChange = 'transform';
-      t.style.transition = 'transform .22s cubic-bezier(0.2, 0.0, 0.0, 1)';
-      wcTimer = setTimeout(() => { t.style.willChange = 'auto'; t.style.transition = 'none'; }, 280);
-    } else {
-      t.style.transition = 'none';
-      t.style.willChange = 'auto';
-    }
-    t.style.transform = `translateX(${x}px)`;
-    trackX = x;
-  }
-
   function goTo(i, anim = true) {
     if (i < 0 || i >= CALCS.length) return;
     idx = i;
     panelW = $('viewport').clientWidth;
     currX = -i * panelW;
-    setTrack(currX, anim);
+    const t = $('track');
+    if (anim) {
+      t.style.willChange = 'transform';
+      // Short ease-out — no overshoot/bounce
+      t.style.transition = 'transform .22s cubic-bezier(0.2, 0.0, 0.0, 1)';
+      const onEnd = () => { t.style.willChange = 'auto'; t.style.transition = 'none'; t.removeEventListener('transitionend', onEnd); };
+      t.addEventListener('transitionend', onEnd);
+    } else {
+      t.style.transition = 'none';
+      t.style.willChange = 'auto';
+    }
+    t.style.transform = `translateX(${currX}px)`;
     updateHeader();
   }
 
   function updateHeader() {
     const c = CALCS[idx];
-    document.querySelectorAll('.panel').forEach((p, i) => { p.inert = i !== idx; p.setAttribute('aria-hidden', String(i !== idx)); });
     $('hdr-title').textContent = c.name;
     const icon = $('hdr-icon');
     icon.className = `w-9 h-9 rounded-xl ${c.bg} flex items-center justify-center shadow-sm`;
     icon.innerHTML = `<i data-lucide="${c.icon}" class="w-5 h-5 text-white"></i>`;
     document.querySelectorAll('.nav-btn').forEach((b, i) => {
-      const ic = b.querySelector('svg, i'), sp = b.querySelector('span');
+      const ic = b.querySelector('i'), sp = b.querySelector('span');
       if (i === idx) {
         b.classList.add('bg-slate-100');
         b.setAttribute('aria-selected', 'true');
-        ic.setAttribute('class', `w-5 h-5 ${c.accent}`);
+        ic.className = `w-5 h-5 ${c.accent}`;
         sp.className = 'text-[10px] font-medium text-slate-800';
       } else {
         b.classList.remove('bg-slate-100');
         b.setAttribute('aria-selected', 'false');
-        ic.setAttribute('class', 'w-5 h-5 text-slate-400');
+        ic.className = 'w-5 h-5 text-slate-400';
         sp.className = 'text-[10px] font-medium text-slate-400';
       }
     });
     if (window.lucide) lucide.createIcons();
   }
 
-  // ========== Swipe: direction lock + velocity; will-change only while dragging ==========
+  // ========== Swipe with direction lock + velocity (smooth, no bounce) ==========
   let lastMoveX = 0, lastMoveT = 0, velocityX = 0;
 
   function setupSwipe() {
@@ -180,89 +166,108 @@
 
     const onStart = (x, y) => {
       dragging = true;
-      startX = x; startY = y; lastMoveX = x;
+      startX = x;
+      startY = y;
+      lastMoveX = x;
       lastMoveT = performance.now();
-      velocityX = 0; locked = null;
+      velocityX = 0;
+      locked = null;
       panelW = vp.clientWidth;
+      track.style.transition = 'none';
+      track.style.willChange = 'transform';
+      document.body.classList.add('swiping');
     };
 
     const onMove = (x, y, e) => {
       if (!dragging) return;
-      const dx = x - startX, dy = y - startY;
-      const now = performance.now(), dt = now - lastMoveT;
-      if (dt > 0) velocityX = velocityX * 0.6 + ((x - lastMoveX) / dt) * 0.4;
-      lastMoveX = x; lastMoveT = now;
+      const dx = x - startX;
+      const dy = y - startY;
+      const now = performance.now();
+      const dt = now - lastMoveT;
+      if (dt > 0) {
+        // Exponential smoothing for velocity (px/ms)
+        const v = (x - lastMoveX) / dt;
+        velocityX = velocityX * 0.6 + v * 0.4;
+      }
+      lastMoveX = x;
+      lastMoveT = now;
 
       if (!locked && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
         locked = Math.abs(dx) > Math.abs(dy) * 1.15 ? 'h' : 'v';
-        if (locked === 'h') {
-          clearTimeout(wcTimer);
-          track.style.transition = 'none';
-          track.style.willChange = 'transform';
-          document.body.classList.add('swiping');
-        }
       }
+
+      if (locked === 'v') return;
       if (locked !== 'h') return;
+
       if (e && e.cancelable) e.preventDefault();
 
+      // Hard clamp at edges — no rubber-band resistance
       let d = dx;
       if (idx === 0 && d > 0) d = 0;
       if (idx === CALCS.length - 1 && d < 0) d = 0;
-      trackX = currX + d;
-      track.style.transform = `translateX(${trackX}px)`;
-    };
-
-    const mouseMove = e => onMove(e.clientX, e.clientY, null);
-    const mouseUp = e => onEnd(e.clientX);
-
-    const endDrag = () => {
-      dragging = false;
-      document.body.classList.remove('swiping');
-      window.removeEventListener('mousemove', mouseMove);
-      window.removeEventListener('mouseup', mouseUp);
+      track.style.transform = `translateX(${currX + d}px)`;
     };
 
     const onEnd = (x) => {
       if (!dragging) return;
-      const wasH = locked === 'h';
-      const d = x - startX;
-      const v = velocityX;
-      endDrag();
-      locked = null; velocityX = 0;
-      if (!wasH) return;  // vertical scroll / tap: track never moved, nothing to restore
+      dragging = false;
+      document.body.classList.remove('swiping');
 
-      const th = panelW * 0.18;
-      if ((d < -th || v < -0.35) && idx < CALCS.length - 1) goTo(idx + 1, true);
-      else if ((d > th || v > 0.35) && idx > 0) goTo(idx - 1, true);
-      else goTo(idx, true);
+      if (locked !== 'h') {
+        goTo(idx, true);
+        locked = null;
+        velocityX = 0;
+        return;
+      }
+
+      const d = x - startX;
+      const th = panelW * 0.18; // distance threshold
+      // velocity threshold ~0.35 px/ms ≈ quick flick
+      const flick = Math.abs(velocityX) > 0.35;
+
+      if ((d < -th || (flick && velocityX < -0.35)) && idx < CALCS.length - 1) {
+        goTo(idx + 1, true);
+      } else if ((d > th || (flick && velocityX > 0.35)) && idx > 0) {
+        goTo(idx - 1, true);
+      } else {
+        goTo(idx, true);
+      }
+      locked = null;
+      velocityX = 0;
     };
 
     vp.addEventListener('touchstart', e => {
-      // let horizontally scrollable areas (e.g. mortgage table) handle their own touches
-      if (e.touches.length > 1 || e.target.closest('.hscroll')) return;
       const t = e.touches[0];
       onStart(t.clientX, t.clientY);
     }, { passive: true });
-    vp.addEventListener('touchmove', e => { const t = e.touches[0]; onMove(t.clientX, t.clientY, e); }, { passive: false });
-    vp.addEventListener('touchend', e => onEnd(e.changedTouches[0].clientX), { passive: true });
-    vp.addEventListener('touchcancel', () => {
-      if (!dragging) return;
-      const wasH = locked === 'h';
-      endDrag(); locked = null; velocityX = 0;
-      if (wasH) goTo(idx, true);
+
+    vp.addEventListener('touchmove', e => {
+      const t = e.touches[0];
+      onMove(t.clientX, t.clientY, e);
+    }, { passive: false });
+
+    vp.addEventListener('touchend', e => {
+      const t = e.changedTouches[0];
+      onEnd(t.clientX);
     }, { passive: true });
 
-    // Mouse: window listeners only exist during a drag
+    vp.addEventListener('touchcancel', () => {
+      if (!dragging) return;
+      dragging = false;
+      document.body.classList.remove('swiping');
+      goTo(idx, true);
+      locked = null;
+      velocityX = 0;
+    }, { passive: true });
+
     vp.addEventListener('mousedown', e => {
-      if (e.button !== 0 || e.target.closest('input, select, button, textarea, a, label, .hscroll')) return;
+      if (e.target.closest('input, select, button, textarea, a, label')) return;
       e.preventDefault();
       onStart(e.clientX, e.clientY);
-      window.addEventListener('mousemove', mouseMove);
-      window.addEventListener('mouseup', mouseUp);
     });
+    window.addEventListener('mousemove', e => onMove(e.clientX, e.clientY, null));
+    window.addEventListener('mouseup', e => onEnd(e.clientX));
 
-    // keyboard focus must never scroll the (overflow:hidden) viewport sideways
-    vp.addEventListener('scroll', () => { vp.scrollLeft = 0; });
     window.addEventListener('resize', () => goTo(idx, false));
   }
 
@@ -313,7 +318,10 @@
           </div>
           <div class="relative pt-1">
             <div class="w-full bg-black/20 rounded-full h-2.5 flex overflow-hidden">
-              ${BMI_SEGMENTS.map(g => `<div class="${g.color}" style="width:${g.width}%"></div>`).join('')}
+              <div class="bg-blue-300" style="width:20%"></div>
+              <div class="bg-emerald-400" style="width:30%"></div>
+              <div class="bg-amber-300" style="width:25%"></div>
+              <div class="bg-red-400" style="width:25%"></div>
             </div>
             <div id="bmi-ptr" class="absolute -top-0.5 -translate-x-1/2 transition-all" style="left:40%"><div class="w-0 h-0 border-l-[5px] border-r-[5px] border-b-[6px] border-l-transparent border-r-transparent border-b-white"></div></div>
           </div>
@@ -449,7 +457,7 @@
             <span class="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5"><i data-lucide="table" class="w-4 h-4 text-blue-500"></i>每年還款摘要</span>
             <button id="mtg-tog" class="text-xs font-semibold text-blue-500">展開</button>
           </div>
-          <div id="mtg-sch" class="hidden overflow-x-auto hscroll">
+          <div id="mtg-sch" class="hidden overflow-x-auto">
             <table class="w-full text-left text-xs"><thead class="bg-slate-50 text-slate-500 border-b border-slate-100"><tr><th class="p-3">年</th><th class="p-3">本金</th><th class="p-3">利息</th><th class="p-3">剩餘</th></tr></thead>
             <tbody id="mtg-body" class="divide-y divide-slate-50 text-slate-600"></tbody></table>
           </div>
@@ -458,7 +466,7 @@
     if (window.lucide) lucide.createIcons();
 
     const calc = () => {
-      const price = val('mtg-price') * 10000, pct = Math.min(100, Math.max(0, val('mtg-pct'))), yrs = +$('mtg-ten').value || 30, rate = val('mtg-rate') / 100;
+      const price = val('mtg-price') * 10000, pct = val('mtg-pct'), yrs = +$('mtg-ten').value || 30, rate = val('mtg-rate') / 100;
       const ltv = 100 - pct;
       // Loan principal is NOT inflated by MIP
       const loan = price * ltv / 100;
@@ -573,13 +581,11 @@
       </div>`;
     if (window.lucide) lucide.createIcons();
 
-    let members = lsGet('pty_m', ['阿Dave', 'May', 'Ben']);
-    if (!Array.isArray(members)) members = [];
-    let expenses = lsGet('pty_e', []);
-    if (!Array.isArray(expenses)) expenses = [];
+    let members = JSON.parse(localStorage.getItem('pty_m') || '["阿Dave","May","Ben"]');
+    let expenses = JSON.parse(localStorage.getItem('pty_e') || '[]');
     // last computed transfers for copy
     let lastTransfers = [];
-    const save = () => { lsSet('pty_m', members); lsSet('pty_e', expenses); };
+    const save = () => { localStorage.setItem('pty_m', JSON.stringify(members)); localStorage.setItem('pty_e', JSON.stringify(expenses)); };
 
     function renderMembers() {
       $('pty-n').textContent = members.length;
@@ -589,28 +595,24 @@
       members.forEach(m => {
         const p = document.createElement('div');
         p.className = 'flex items-center bg-white border border-indigo-200 text-indigo-700 text-xs font-semibold px-3 py-1.5 rounded-full shadow-sm';
-        p.innerHTML = `<span>${esc(m)}</span><button type="button" class="ml-1.5 text-indigo-300 hover:text-red-500" data-n="${esc(m)}" aria-label="移除 ${esc(m)}"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>`;
+        p.innerHTML = `<span>${m}</span><button type="button" class="ml-1.5 text-indigo-300 hover:text-red-500" data-n="${m}" aria-label="移除 ${m}"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>`;
         p.querySelector('button').onclick = () => {
           // Remove member from participants; drop expenses that end up with 0 participants
           members = members.filter(x => x !== m);
           const before = expenses.length;
-          let changed = 0;
           expenses = expenses.filter(e => {
-            const n0 = e.participants.length;
             e.participants = e.participants.filter(pp => pp !== m);
-            if (e.participants.length !== n0) changed++;
-            if (e.payer === m) { e.payer = members[0] || ''; changed++; }
+            if (e.payer === m) e.payer = members[0] || '';
             return e.participants.length > 0 && e.payer;
           });
           const removed = before - expenses.length;
           save();
           renderAll();
-          if (removed > 0 || changed > 0) {
+          if (removed > 0) {
             // Brief notice
             const note = document.createElement('div');
             note.className = 'fixed bottom-20 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs px-4 py-2 rounded-full shadow-lg z-50';
-            note.setAttribute('role', 'status');
-            note.textContent = `已移除 ${m}：重新分攤 ${changed} 項、刪除 ${removed} 筆無人分擔的消費`;
+            note.textContent = `已移除 ${m}，並清理了 ${removed} 筆無參與者的消費`;
             document.body.appendChild(note);
             setTimeout(() => note.remove(), 2500);
           }
@@ -619,7 +621,7 @@
         const o = document.createElement('option'); o.value = m; o.textContent = m; payer.appendChild(o);
         const lb = document.createElement('label');
         lb.className = 'flex items-center gap-1 border border-slate-200 px-2 py-1 rounded-lg bg-white cursor-pointer';
-        lb.innerHTML = `<input type="checkbox" value="${esc(m)}" checked class="pty-cb rounded accent-indigo-500"> <span>${esc(m)}</span>`;
+        lb.innerHTML = `<input type="checkbox" value="${m}" checked class="pty-cb rounded accent-indigo-500"> <span>${m}</span>`;
         cbs.appendChild(lb);
       });
       if (window.lucide) lucide.createIcons();
@@ -633,7 +635,7 @@
         const li = document.createElement('li');
         li.className = 'px-4 py-3 flex justify-between items-center text-sm';
         const st = exp.participants.length === members.length ? '所有人' : exp.participants.length + '人';
-        li.innerHTML = `<div class="flex-1 min-w-0"><div class="flex items-center gap-2"><span class="font-bold text-slate-700 truncate">${esc(exp.title) || '消費'}</span><span class="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-md font-medium">${esc(exp.payer)}付</span></div><p class="text-xs text-slate-400">${st}</p></div><div class="flex items-center gap-3"><span class="font-black text-slate-800">$${money(exp.amount)}</span><button type="button" class="text-slate-300 hover:text-red-500" data-id="${exp.id}" aria-label="刪除消費"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div>`;
+        li.innerHTML = `<div class="flex-1 min-w-0"><div class="flex items-center gap-2"><span class="font-bold text-slate-700 truncate">${exp.title}</span><span class="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-md font-medium">${exp.payer}付</span></div><p class="text-xs text-slate-400">${st}</p></div><div class="flex items-center gap-3"><span class="font-black text-slate-800">$${money(exp.amount)}</span><button type="button" class="text-slate-300 hover:text-red-500" data-id="${exp.id}" aria-label="刪除消費"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div>`;
         li.querySelector('button').onclick = () => { expenses = expenses.filter(e => e.id !== exp.id); save(); renderAll(); };
         list.appendChild(li);
       });
@@ -647,20 +649,18 @@
       const bals = {}; members.forEach(m => bals[m] = 0);
       expenses.forEach(exp => {
         if (!exp.participants || exp.participants.length === 0) return;
-        const cents = Math.round(exp.amount * 100);
-        if (bals[exp.payer] !== undefined) bals[exp.payer] += cents;
-        const n = exp.participants.length, base = Math.floor(cents / n), rem = cents - base * n;
-        exp.participants.forEach((p, k) => {
-          if (bals[p] !== undefined) bals[p] -= base + (k < rem ? 1 : 0);
+        if (bals[exp.payer] !== undefined) bals[exp.payer] = round1(bals[exp.payer] + exp.amount);
+        const sh = exp.amount / exp.participants.length;
+        exp.participants.forEach(p => {
+          if (bals[p] !== undefined) bals[p] = round1(bals[p] - sh);
         });
       });
-      Object.keys(bals).forEach(m => { bals[m] = bals[m] / 100; });
       const bl = $('pty-bals'); bl.innerHTML = '';
       members.forEach(m => {
         const b = bals[m] || 0;
         const d = document.createElement('div');
         d.className = 'flex justify-between items-center bg-white px-3 py-1.5 rounded-lg border border-emerald-100';
-        d.innerHTML = `<span class="font-medium text-slate-600">${esc(m)}</span>${Math.abs(b) < 0.05 ? '<span class="text-slate-400">$0</span>' : b > 0 ? `<span class="text-emerald-600 font-bold">應收回 +$${money(b)}</span>` : `<span class="text-red-500 font-bold">應支付 -$${money(Math.abs(b))}</span>`}`;
+        d.innerHTML = `<span class="font-medium text-slate-600">${m}</span>${Math.abs(b) < 0.05 ? '<span class="text-slate-400">$0</span>' : b > 0 ? `<span class="text-emerald-600 font-bold">應收回 +$${money(b)}</span>` : `<span class="text-red-500 font-bold">應支付 -$${money(Math.abs(b))}</span>`}`;
         bl.appendChild(d);
       });
       const debt = [], cred = [];
@@ -669,7 +669,6 @@
         if (b < -0.05) debt.push({ n: m, a: -b });
         else if (b > 0.05) cred.push({ n: m, a: b });
       });
-      debt.sort((x, y) => y.a - x.a); cred.sort((x, y) => y.a - x.a);
       const trans = []; let i = 0, j = 0;
       while (i < debt.length && j < cred.length) {
         const a = Math.min(debt[i].a, cred[j].a);
@@ -685,7 +684,7 @@
         trans.forEach(t => {
           const c = document.createElement('div');
           c.className = 'bg-white p-3 rounded-xl border border-emerald-200 flex items-center justify-between shadow-sm';
-          c.innerHTML = `<div class="flex items-center gap-2"><span class="font-bold text-red-500">${esc(t.f)}</span><i data-lucide="arrow-right" class="w-4 h-4 text-slate-300"></i><span class="font-bold text-emerald-600">${esc(t.t)}</span></div><span class="font-black text-slate-800">$${money(t.a)}</span>`;
+          c.innerHTML = `<div class="flex items-center gap-2"><span class="font-bold text-red-500">${t.f}</span><i data-lucide="arrow-right" class="w-4 h-4 text-slate-300"></i><span class="font-bold text-emerald-600">${t.t}</span></div><span class="font-black text-slate-800">$${money(t.a)}</span>`;
           tl.appendChild(c);
         });
         if (window.lucide) lucide.createIcons();
@@ -809,11 +808,11 @@
       </div>`;
     if (window.lucide) lucide.createIcons();
 
-    let items = lsGet('sm_items', []);
-    let budget = lsGet('sm_budget', null);
+    let items = JSON.parse(localStorage.getItem('sm_items') || '[]');
+    let budget = localStorage.getItem('sm_budget') ? parseFloat(localStorage.getItem('sm_budget')) : null;
     let disc = 1;
-    const save = () => lsSet('sm_items', items);
-    const saveB = () => budget != null && !isNaN(budget) ? lsSet('sm_budget', budget) : lsDel('sm_budget');
+    const save = () => localStorage.setItem('sm_items', JSON.stringify(items));
+    const saveB = () => budget != null && !isNaN(budget) ? localStorage.setItem('sm_budget', budget) : localStorage.removeItem('sm_budget');
 
     function render() {
       const list = $('sm-list'); list.innerHTML = '';
@@ -827,7 +826,7 @@
       items.forEach((it, i) => {
         const li = document.createElement('li');
         li.className = 'px-4 py-3 flex justify-between items-center text-sm';
-        const name = esc(String(it.name || '').trim()) || `貨品 #${i + 1}`;
+        const name = it.name.trim() || `貨品 #${i + 1}`;
         li.innerHTML = `<div class="flex-1 min-w-0 pr-3"><p class="font-semibold text-slate-700 truncate">${name}</p><p class="text-xs text-slate-400">$${money(it.price)} × ${it.qty}</p></div>
           <div class="flex items-center gap-3">
             <div class="flex items-center bg-slate-100 rounded-lg p-0.5">
@@ -895,7 +894,7 @@
     $('sm-budget').oninput = e => { const v = parseFloat(e.target.value); budget = !isNaN(v) && v > 0 ? v : null; saveB(); calc(); };
     $('sm-disc').onchange = e => { disc = parseFloat(e.target.value); calc(); };
     window.addEventListener('reset-calc', e => {
-      if (e.detail.id === 'supermarket') { items = []; budget = null; disc = 1; $('sm-budget').value = ''; $('sm-disc').value = '1'; save(); saveB(); render(); }
+      if (e.detail.id === 'supermarket') { items = []; save(); render(); }
     });
     render();
   }
@@ -922,13 +921,10 @@
       { id: 'd7', name: '本鮪大吞拿魚腩', plateId: '7', icon: '⭐', count: 0 },
     ];
 
-    let plates = lsGet('su_plates', null);
-    if (!Array.isArray(plates) || !plates.length) plates = JSON.parse(JSON.stringify(DEFAULT_PLATES));
-    let dishes = lsGet('su_dishes', null);
-    if (!Array.isArray(dishes)) dishes = JSON.parse(JSON.stringify(DEFAULT_DISHES));
+    let plates = JSON.parse(localStorage.getItem('su_plates') || 'null') || JSON.parse(JSON.stringify(DEFAULT_PLATES));
+    let dishes = JSON.parse(localStorage.getItem('su_dishes') || 'null') || JSON.parse(JSON.stringify(DEFAULT_DISHES));
     // Ensure count field exists on loaded dishes
     dishes.forEach(d => { if (typeof d.count !== 'number') d.count = 0; });
-    dishes = dishes.filter(d => plates.some(p => p.id === d.plateId));
     let svc = true;
 
     el.innerHTML = `
@@ -1007,13 +1003,8 @@
       </div>`;
     if (window.lucide) lucide.createIcons();
 
-    const saveP = () => lsSet('su_plates', plates);
-    const saveD = () => lsSet('su_dishes', dishes);
-    // dish counts of a plate can never exceed that plate's count
-    function clampDishes(p) {
-      let over = dishes.filter(d => d.plateId === p.id).reduce((t, d) => t + d.count, 0) - p.count;
-      dishes.filter(d => d.plateId === p.id).reverse().forEach(d => { const cut = Math.min(d.count, Math.max(0, over)); d.count -= cut; over -= cut; });
-    }
+    const saveP = () => localStorage.setItem('su_plates', JSON.stringify(plates));
+    const saveD = () => localStorage.setItem('su_dishes', JSON.stringify(dishes));
 
     function renderGrid() {
       const g = $('su-grid'); g.innerHTML = '';
@@ -1025,7 +1016,7 @@
             <div class="flex items-center gap-3">
               <div class="w-11 h-11 rounded-xl ${p.color || 'bg-red-400'} flex items-center justify-center text-lg shadow-inner text-white">${p.icon || '🍣'}</div>
               <div>
-                <h3 class="font-bold text-slate-700 text-sm leading-snug">${esc(p.name)}</h3>
+                <h3 class="font-bold text-slate-700 text-sm leading-snug">${p.name}</h3>
                 <span class="font-extrabold text-red-500 text-sm">$${p.price}</span>
               </div>
             </div>
@@ -1037,7 +1028,7 @@
             <button type="button" class="su-p flex-1 py-2.5 rounded-xl font-extrabold text-lg btn-soft-plus active:scale-95 transition" data-id="${p.id}" aria-label="增加 ${p.name}">+</button>
           </div>`;
         card.querySelector('.su-p').onclick = () => { p.count++; saveP(); updatePlateUI(p); calcAndSum(); };
-        card.querySelector('.su-m').onclick = () => { p.count = Math.max(0, p.count - 1); clampDishes(p); saveP(); saveD(); updatePlateUI(p); renderDishes(); calcAndSum(); };
+        card.querySelector('.su-m').onclick = () => { p.count = Math.max(0, p.count - 1); saveP(); updatePlateUI(p); calcAndSum(); };
         g.appendChild(card);
       });
     }
@@ -1060,7 +1051,7 @@
         btn.type = 'button';
         btn.className = 'flex items-center gap-1.5 bg-slate-50 hover:bg-orange-50 border border-slate-100 hover:border-orange-200 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 transition active:scale-95 shadow-sm';
         const badge = d.count > 0 ? `<span class="bg-orange-100 text-orange-600 px-1.5 rounded-md text-[10px] font-bold">${d.count}</span>` : '';
-        btn.innerHTML = `<span>${esc(d.icon || '🍣')}</span><span>${esc(d.name)}</span><span class="text-red-500 font-bold">($${price})</span>${badge}`;
+        btn.innerHTML = `<span>${d.icon || '🍣'}</span><span>${d.name}</span><span class="text-red-500 font-bold">($${price})</span>${badge}`;
         btn.onclick = () => {
           if (tp) {
             tp.count++;
@@ -1092,7 +1083,7 @@
       selPlates.forEach(p => {
         const li = document.createElement('li');
         li.className = 'px-4 py-2.5 flex justify-between items-center text-xs sm:text-sm';
-        li.innerHTML = `<div class="flex items-center gap-2"><span>${p.icon}</span><span class="font-bold text-slate-700">${esc(p.name)}</span><span class="text-slate-400 text-xs">($${p.price})</span></div>
+        li.innerHTML = `<div class="flex items-center gap-2"><span>${p.icon}</span><span class="font-bold text-slate-700">${p.name}</span><span class="text-slate-400 text-xs">($${p.price})</span></div>
           <div class="flex items-center gap-3"><span class="font-semibold text-slate-500">x ${p.count}</span><span class="font-bold text-slate-800 w-14 text-right">$${p.price * p.count}</span></div>`;
         list.appendChild(li);
       });
@@ -1108,9 +1099,8 @@
           const price = tp ? tp.price : 0;
           const li = document.createElement('li');
           li.className = 'px-4 py-2 flex justify-between items-center text-xs text-slate-500';
-          li.innerHTML = `<div class="flex items-center gap-2"><span>${esc(d.icon)}</span><span>${esc(d.name)}</span></div>
-            <div class="flex items-center gap-2"><span class="font-medium">x ${d.count} · $${price * d.count}</span><button type="button" class="su-dm w-6 h-6 rounded btn-soft-minus font-bold" aria-label="減少 ${esc(d.name)}">−</button></div>`;
-          li.querySelector('.su-dm').onclick = () => { if (tp) { tp.count = Math.max(0, tp.count - 1); updatePlateUI(tp); } d.count = Math.max(0, d.count - 1); saveP(); saveD(); renderDishes(); calcAndSum(); };
+          li.innerHTML = `<div class="flex items-center gap-2"><span>${d.icon}</span><span>${d.name}</span></div>
+            <span class="font-medium">x ${d.count} · $${price * d.count}</span>`;
           list.appendChild(li);
         });
       }
@@ -1122,8 +1112,8 @@
         const d = document.createElement('div');
         d.className = 'flex items-center gap-2 bg-white p-2 rounded-xl border border-orange-100 text-xs';
         d.innerHTML = `
-          <input type="text" value="${esc(p.icon || '🍣')}" class="w-8 px-1 py-1 text-center border border-slate-200 rounded-md bg-slate-50 outline-none" data-id="${p.id}" data-f="icon">
-          <input type="text" value="${esc(p.name)}" class="flex-1 px-2 py-1 border border-slate-200 rounded-md font-medium text-slate-700 bg-slate-50 outline-none" data-id="${p.id}" data-f="name">
+          <input type="text" value="${p.icon || '🍣'}" class="w-8 px-1 py-1 text-center border border-slate-200 rounded-md bg-slate-50 outline-none" data-id="${p.id}" data-f="icon">
+          <input type="text" value="${p.name}" class="flex-1 px-2 py-1 border border-slate-200 rounded-md font-medium text-slate-700 bg-slate-50 outline-none" data-id="${p.id}" data-f="name">
           <div class="flex items-center gap-1"><span class="text-slate-400">$</span><input type="number" min="0" value="${p.price}" inputmode="decimal" class="w-16 px-2 py-1 border border-slate-200 rounded-md font-bold text-slate-800 bg-slate-50 outline-none" data-id="${p.id}" data-f="price"></div>
           <button type="button" class="text-slate-300 hover:text-red-500 p-1" data-id="${p.id}" data-act="del" aria-label="刪除盤種"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>`;
         d.querySelectorAll('input').forEach(inp => {
@@ -1139,7 +1129,6 @@
         d.querySelector('[data-act="del"]').onclick = () => {
           if (plates.length <= 1) return;
           plates = plates.filter(x => x.id !== p.id);
-          dishes = dishes.filter(x => x.plateId !== p.id); saveD();
           saveP(); renderGrid(); renderDishes(); renderSettings(); calcAndSum();
         };
         cont.appendChild(d);
@@ -1198,9 +1187,11 @@
 
   // ========== Boot ==========
   buildShell();
-  [initBMI, initMortgage, initParty, initSupermarket, initSushiro].forEach(fn => {
-    try { fn(); } catch (err) { console.error(fn.name, err); }
-  });
+  initBMI();
+  initMortgage();
+  initParty();
+  initSupermarket();
+  initSushiro();
   goTo(0, false);
 
   if ('serviceWorker' in navigator) {
